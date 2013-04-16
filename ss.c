@@ -42,7 +42,7 @@ int main(int argc, char const *argv[])
 		cut_characters (input, 1);
 
 		item * current = curr;
-		for (i = 0; i <active_pids; ++i)
+		for (i = 0; i <active_pids; i++)
 		{
 			pid = waitpid (current->pid, &status, WNOHANG);
 			if (pid > 0){
@@ -76,7 +76,7 @@ int main(int argc, char const *argv[])
 				struct stat dir;
 				int exists = stat (token, &dir);
 				if (exists == -1 || !S_ISDIR (dir.st_mode)){
-					printf("doesn't exist\n");
+					printf("directory does not exist, defaulting to homedir\n");
 					token = getenv ("HOME");
 				}
 				//cd to token
