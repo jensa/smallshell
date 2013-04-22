@@ -8,9 +8,27 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <sys/time.h>
+
+/* Timer function. Uses gettimeofday (2) to get the current time with high precision. 
+	Returns a double representing the current time in milli(??)seconds */ 
+double read_timer() {
+  static bool initialized = false;
+  static struct timeval start;
+  struct timeval end;
+  if( !initialized )
+  {
+    gettimeofday( &start, NULL );
+    initialized = true;
+  }
+  gettimeofday( &end, NULL );
+  return (end.tv_sec - start.tv_sec) + 1.0e-6 * (end.tv_usec - start.tv_usec);
+}
 
 struct list_element {
 	pid_t pid;
+	double start_time;
 	struct list_element * next;
 };
 
@@ -20,6 +38,11 @@ void cut_characters (char * string, int num){
 	int len = strlen (string);
 	string += (len-num);
 	*string = '\0';
+}
+
+void print_statistics (item * process){
+	double current_time = read_timer ();
+	printf ("The process with PID %d terminated after running for %f seconds", process->pid, (current_time - process->start_time));
 }
 
 int main(int argc, char const *argv[])
@@ -34,26 +57,30 @@ int main(int argc, char const *argv[])
 	char input[70];
 	int status;
 	pid_t pid;
-	item * curr, * head;
-	head = NULL;
+	item * head;
+	/* main program loop, takes input from user and executes its commands */
 	while (1){
-		printf("%s%s$ ", bash, cwd);
-		fgets (input, 400, stdin);
-		cut_characters (input, 1);
-
-		item * current = curr;
-		for (i = 0; i <active_pids; i++)
-		{
-			pid = waitpid (current->pid, &status, WNOHANG);
+		printf("%s%s$ ", bash, cwd); /* print out the bash symbol for taking input */
+		fgets (input, 400, stdin); /* read one line of input from STDIN */
+		cut_characters (input, 1); /* cut the newline character from the end of the input string */
+		item * current = head;
+		/* Go through the linked list of all active background processes 
+		and check for status change (killed/exited processes) */
+		for (i = 0; i <active_pids; i++){
+			pid = waitpid (current->pid, &status, WNOHANG); /* check process for status change. 
+			WNOHANG option ensures the call returns immediately. */
 			if (pid > 0){
-				printf ("Process with PID %d has exited.\n", pid);
+				print_statistics (current);
+				remove_item (current);
 				active_pids--;
 			}
-			if (pid == -1){
+			else if (pid == -1){
 				//error
+			} else{
+				current = current->next;
 			}
-		current = current->next;
 		}
+		printf("Active child background processes: %d\n",active_pids);
 		char *program_args[20];
 		char * token;
 		char * input_string;
@@ -79,9 +106,8 @@ int main(int argc, char const *argv[])
 					printf("directory does not exist, defaulting to homedir\n");
 					token = getenv ("HOME");
 				}
-				//cd to token
-				chdir (token);
-				cwd = getcwd (0, 0);
+				chdir (token); /* change working directory to the given path */
+				cwd = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
 			}
 			program_args[i] = strdup (token);
 
@@ -101,15 +127,12 @@ int main(int argc, char const *argv[])
 		if (!background){
 			waitpid (pid, &status, 0);
 		} else{
-			curr = (item *)malloc (sizeof (item));
-			curr->pid = pid;
-			curr->next = head;
-			head = curr;
+			item * node = (item *)malloc (sizeof (item));
+			node->pid = pid;
+			node->start_time = read_timer ();
+			add_item (node);
 			active_pids++;
 		}
-
-		printf("Active child background processes: %d\n",active_pids);
-
 	}
 
 }
