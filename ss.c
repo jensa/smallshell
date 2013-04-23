@@ -11,6 +11,24 @@
 #include <time.h>
 #include <sys/time.h>
 
+struct list_element {
+	pid_t pid;
+	double start_time;
+	struct list_element * next;
+};
+
+typedef struct list_element item;
+
+/*Global variables */
+item * head;
+
+/* Function declarations */
+double read_timer ();
+void remove_item (item *);
+void cut_characters (char *, int);
+void print_statistics (item *);
+void add_item (item *);
+
 /* Timer function. Uses gettimeofday (2) to get the current time with high precision. 
 	Returns a double representing the current time in milli(??)seconds */ 
 double read_timer() {
@@ -26,13 +44,24 @@ double read_timer() {
   return (end.tv_sec - start.tv_sec) + 1.0e-6 * (end.tv_usec - start.tv_usec);
 }
 
-struct list_element {
-	pid_t pid;
-	double start_time;
-	struct list_element * next;
-};
+void remove_item (item * node){
+	item * cur = head;
+	while (cur->next && cur->next != node){
+		printf ("GETTING NEXT IN REMOVE");
+		cur = cur->next;
+	}
+	cur->next = node->next;
+	free (node);
+}
 
-typedef struct list_element item;
+void add_item (item * node){
+	item * cur = head;
+	while (cur->next != NULL){
+		printf ("GETTING NEXT IN ADD");
+		cur = cur->next;
+	}
+	cur->next = node;
+}
 
 void cut_characters (char * string, int num){
 	int len = strlen (string);
@@ -42,7 +71,7 @@ void cut_characters (char * string, int num){
 
 void print_statistics (item * process){
 	double current_time = read_timer ();
-	printf ("The process with PID %d terminated after running for %f seconds", process->pid, (current_time - process->start_time));
+	printf ("The process with PID %d terminated after running for %f seconds\n", process->pid, (current_time - process->start_time));
 }
 
 int main(int argc, char const *argv[])
@@ -57,7 +86,6 @@ int main(int argc, char const *argv[])
 	char input[70];
 	int status;
 	pid_t pid;
-	item * head;
 	/* main program loop, takes input from user and executes its commands */
 	while (1){
 		printf("%s%s$ ", bash, cwd); /* print out the bash symbol for taking input */
@@ -108,6 +136,7 @@ int main(int argc, char const *argv[])
 				}
 				chdir (token); /* change working directory to the given path */
 				cwd = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
+				break;
 			}
 			program_args[i] = strdup (token);
 
@@ -118,7 +147,7 @@ int main(int argc, char const *argv[])
 		
 		pid = fork ();
 		if (pid == 0){
-			printf ("ARGS: %s\n", *program_args);
+			printf ("ARGS: %s in process: %d\n", *program_args, pid);
 			retval = execvp (*program_args, program_args);
 			if (retval != -1)
 				printf ("Process with PID %d created\n", pid);
@@ -130,7 +159,11 @@ int main(int argc, char const *argv[])
 			item * node = (item *)malloc (sizeof (item));
 			node->pid = pid;
 			node->start_time = read_timer ();
+			if (head == NULL){
+				head = node;
+			} else{
 			add_item (node);
+			}
 			active_pids++;
 		}
 	}
