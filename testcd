@@ -1,0 +1,11 @@
+Script started on Wed 01 May 2013 22:20:50 CEST
+]0;jens@ubuntu: ~/OS/smallshelljens@ubuntu:~/OS/smallshell$ ./ss
+smallshell:/home/jens/OS/smallshell$ cd ..
+smallshell:/home/jens/OS$ cd ..
+smallshell:/home/jens$ cd OS
+smallshell:/home/jens/OS$ cd smallshell
+smallshell:/home/jens/OS/smallshell$ exit
+Exiting...
+]0;jens@ubuntu: ~/OS/smallshelljens@ubuntu:~/OS/smallshell$ exit
+
+Script done on Wed 01 May 2013 22:21:06 CEST

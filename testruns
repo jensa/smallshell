@@ -1,0 +1,38 @@
+Script started on Wed 01 May 2013 22:10:42 CEST
+]0;jens@ubuntu: ~/OS/smallshelljens@ubuntu:~/OS/smallshell$ ./ss
+smallshell:/home/jens/OS/smallshell$ ./test 3
+Process with PID 8210 created
+testprogram complete, ran for 3 seconds
+The process with PID 8210 terminated after running for 3.001422 seconds
+smallshell:/home/jens/OS/smallshell$ ./test 3 &
+Background process with PID 8211 created
+smallshell:/home/jens/OS/smallshell$ testprogram complete, ran for 3 seconds
+
+The background process with PID 8211 completed normally
+smallshell:/home/jens/OS/smallshell$ ./test 6 &
+Background process with PID 8212 created
+smallshell:/home/jens/OS/smallshell$ ./test 2
+Process with PID 8213 created
+testprogram complete, ran for 2 seconds
+The process with PID 8213 terminated after running for 2.001644 seconds
+smallshell:/home/jens/OS/smallshell$ testprogram complete, ran for 6 seconds
+
+The background process with PID 8212 completed normally
+smallshell:/home/jens/OS/smallshell$ ./test 10 &
+Background process with PID 8215 created
+smallshell:/home/jens/OS/smallshell$ ./test 25 &
+Background process with PID 8216 created
+smallshell:/home/jens/OS/smallshell$ ./test 10
+Process with PID 8217 created
+testprogram complete, ran for 10 seconds
+testprogram complete, ran for 10 seconds
+The process with PID 8217 terminated after running for 10.001574 seconds
+smallshell:/home/jens/OS/smallshell$ testprogram complete, ran for 25 seconds
+
+The background process with PID 8215 completed normally
+The background process with PID 8216 completed normally
+smallshell:/home/jens/OS/smallshell$ exit
+Exiting...
+]0;jens@ubuntu: ~/OS/smallshelljens@ubuntu:~/OS/smallshell$ exit
+
+Script done on Wed 01 May 2013 22:14:05 CEST
