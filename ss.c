@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <sys/time.h>
+#include <signal.h>
 
 struct list_element {
 	pid_t pid;
@@ -29,6 +30,10 @@ void cut_characters (char *, int);
 void print_statistics (item *);
 void add_item (item *);
 
+void sigint_handler (int sig){
+	//Do nothing...
+}
+
 /* Timer function. Uses gettimeofday (2) to get the current time with high precision. 
 	Returns a double representing the current time in milli(??)seconds */ 
 double read_timer() {
@@ -46,8 +51,13 @@ double read_timer() {
 
 void remove_item (item * node){
 	item * cur = head;
-	while (cur->next && cur->next != node){
-		printf ("GETTING NEXT IN REMOVE");
+	if (node == head){
+		head = node->next;
+		free (node);
+		return;
+	}
+	while (cur->next != NULL && cur->next != node){
+		printf ("GETTING NEXT IN REMOVE\n");
 		cur = cur->next;
 	}
 	cur->next = node->next;
@@ -55,9 +65,9 @@ void remove_item (item * node){
 }
 
 void add_item (item * node){
-	item * cur = head;
+	item * cur = head;	
 	while (cur->next != NULL){
-		printf ("GETTING NEXT IN ADD");
+		printf ("GETTING NEXT IN ADD\n");
 		cur = cur->next;
 	}
 	cur->next = node;
@@ -76,44 +86,54 @@ void print_statistics (item * process){
 
 int main(int argc, char const *argv[])
 {
+	signal (SIGINT, sigint_handler);
+
 	char * bash = "smallshell:";
-	char * cwd = getcwd (0, 0);
+	char * current_working_directory = getcwd (0, 0);
 	char * exit_string = "exit";
 	char * cd_string = "cd";
 	int active_pids = 0;
-	int i = 0;
-	int retval;
+	int i = 0; /* loop variable */
+	int retval, status;
 	char input[70];
-	int status;
+
 	pid_t pid;
+
+
 	/* main program loop, takes input from user and executes its commands */
 	while (1){
-		printf("%s%s$ ", bash, cwd); /* print out the bash symbol for taking input */
+		printf("%s%s$ ", bash, current_working_directory); /* print out the bash symbol for taking input */
 		fgets (input, 400, stdin); /* read one line of input from STDIN */
 		cut_characters (input, 1); /* cut the newline character from the end of the input string */
 		item * current = head;
 		/* Go through the linked list of all active background processes 
 		and check for status change (killed/exited processes) */
-		for (i = 0; i <active_pids; i++){
+		int active_pid_loop = active_pids;
+		for (i = 0; i <active_pid_loop; i++){
 			pid = waitpid (current->pid, &status, WNOHANG); /* check process for status change. 
 			WNOHANG option ensures the call returns immediately. */
 			if (pid > 0){
-				print_statistics (current);
-				remove_item (current);
+				//Check status variable after this to see if the process ended normally
+				//
+				print_statistics (current); // Print stats (TA BORT)
+				item * temp_current = current->next; // temporarily store next item in list
+				remove_item (current); // remove current item from list
+				current = temp_current; // set current element to next item in list
 				active_pids--;
 			}
 			else if (pid == -1){
 				//error
-			} else{
+			} 
+			else{
 				current = current->next;
 			}
 		}
-		printf("Active child background processes: %d\n",active_pids);
-		char *program_args[20];
+		char *program_args[20]; /* Array holding program arguments */
 		char * token;
 		char * input_string;
 		input_string = strdup (input);
-		if (input_string == NULL){
+		/*check for empty input and continue loop if it was empty */
+		if (input_string == NULL || strlen (input_string) == 0){
 			continue;
 		}
 		
@@ -127,35 +147,39 @@ int main(int argc, char const *argv[])
 				exit (0);
 			}
 			if (!strcmp (token, cd_string)){
-				token = strsep(&input_string, " ");
+				token = strsep(&input_string, " "); /* get next token on string, which should contain the path to cd to */
+				printf ("path: %s\n", token);
 				struct stat dir;
-				int exists = stat (token, &dir);
+				int exists = stat (token, &dir); /* Checks if the path given exists, and if it is a dir */
 				if (exists == -1 || !S_ISDIR (dir.st_mode)){
 					printf("directory does not exist, defaulting to homedir\n");
 					token = getenv ("HOME");
 				}
 				chdir (token); /* change working directory to the given path */
-				cwd = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
+				current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
+				input_string = NULL; /* Empty the input string (it might contain garabage efter the path) */
 				break;
 			}
 			program_args[i] = strdup (token);
-
-			i = i+1;
+			i++;
 		}
 		program_args[i] = NULL;
 		free(input_string);
-		
+
 		pid = fork ();
 		if (pid == 0){
-			printf ("ARGS: %s in process: %d\n", *program_args, pid);
 			retval = execvp (*program_args, program_args);
 			if (retval != -1)
 				printf ("Process with PID %d created\n", pid);
 		}
 		
 		if (!background){
+			double start_time = read_timer ();
 			waitpid (pid, &status, 0);
+			double run_time = read_timer () - start_time;
+			printf ("The process with PID %d terminated after running for %f seconds\n", pid, run_time);
 		} else{
+			// Add the background process PID to the linked list 
 			item * node = (item *)malloc (sizeof (item));
 			node->pid = pid;
 			node->start_time = read_timer ();
