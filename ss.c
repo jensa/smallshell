@@ -55,16 +55,24 @@ void clean_exit (int);
 
 /* Function definitions */
 
+/* sigint_handler
+ *
+ * This function is registered as the handler of the SIGINT signal for the program's main process.
+ * The function simply ignores the signal, as the program should not exit upon recieving a SIGINT.
+ */
 void sigint_handler (int sig){
 	//Do nothing when recieveing this signal.
 }
-
+/* clean_exit
+ *
+ * Kills all active background processes of the main program using kill(2), and exits with status code 0.
+ */
 void clean_exit (int active_pids){
 	int active_pid_loop = active_pids;
 	int i;
 	item * current = head;
 	for (i = 0; i <active_pid_loop; i++){
-		kill (current->pid, SIGKILL);
+		kill (current->pid, SIGKILL); /* kill the active background process */
 		current = current->next;
 	}
 	exit (0);
@@ -83,7 +91,7 @@ double read_timer() {
 
 /* check_background_processes
 * 
-* Check_background_processes takes an integer representing the number of active processes
+* check_background_processes takes an integer representing the number of active processes
 * and returns the new number of active processes. 
 * 
 * It loops through the linked list and checks if the different processes have been completed.
@@ -195,47 +203,41 @@ int main(int argc, char const *argv[])
 		}
 		bool background = input_string[strlen (input_string)-1] == '&'; 
 		/* background is used to determine if the user wants to run a background process*/
-		bool is_builtin_command = false;
 		if (background)
 			cut_characters (input_string, 2);
+		token = strsep(&input_string, " ");
+		/*Checks if the given command is exit, and if it is, the shell will exit */
+		if (!strcmp (token, exit_string)){
+			printf("Exiting...\n");
+			clean_exit (active_pids);
+		}
+		/*Checks if the given command is cd */
+		else if (!strcmp (token, cd_string)){
+			/* get next token on string, which should contain the path to cd to */
+			token = strsep(&input_string, " "); 
+			struct stat dir;
+			int exists = stat (token, &dir); 
+			/* Checks if the path given exists, and if it is a dir */
+			if (exists == -1 || !S_ISDIR (dir.st_mode)){
+				printf("directory does not exist, defaulting to homedir\n");
+				token = getenv ("HOME"); /* get HOME variable */
+				if (token == NULL)
+					printf ("HOME environment variable not found\n");
+			}
+			retval = chdir (token); /* change working directory to the given path */
+			if (retval == -1)
+				printf ("Unable to change directory, errno was: %d\n", errno);
+			else
+				current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
+			continue;
+		}
 		int i=0;
 		/*This while loop separates the given arguments*/
-		while ((token = strsep(&input_string, " ")) != NULL)
-		{
-			/*Checks if the given command is Exit, and if it is, the shell will exit */
-			if (!strcmp (token, exit_string)){
-				printf("Exiting...\n");
-				is_builtin_command = true;
-				clean_exit (active_pids);
-			}
-			/*Checks if the given command is cd */
-			if (!strcmp (token, cd_string)){
-				/* get next token on string, which should contain the path to cd to */
-				token = strsep(&input_string, " "); 
-				struct stat dir;
-				int exists = stat (token, &dir); 
-				/* Checks if the path given exists, and if it is a dir */
-				if (exists == -1 || !S_ISDIR (dir.st_mode)){
-					printf("directory does not exist, defaulting to homedir\n");
-					token = getenv ("HOME");
-					if (token == NULL)
-						printf ("HOME environment variable not found\n");
-				}
-				retval = chdir (token); /* change working directory to the given path */
-				if (retval == -1)
-					printf ("Unable to change directory, errno was: %d\n", errno);
-				else
-					current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
-				is_builtin_command = true;
-				break;
-			}
+		do{
 			program_args[i] = strdup (token);
 			i++;
-		}
+		}while ((token = strsep(&input_string, " ")) != NULL);
 		free(input_string);
-		/*If the command is build in, there is nothing more to do with the input given*/
-		if (is_builtin_command)
-			continue;
 		program_args[i] = '\0';
 		/* A new process is created and the given command will be executed using execvp*/
 		pid = fork ();
@@ -278,5 +280,4 @@ int main(int argc, char const *argv[])
 			active_pids++;
 		}
 	}
-
 }
