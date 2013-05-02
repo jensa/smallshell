@@ -1,3 +1,22 @@
+/*
+ *
+ * NAME:
+ *   smallshell  -  this program is a simple shell 
+ * 
+ * SYNTAX:
+ *   command [-arguments]
+ *
+ * DESCRIPTION:
+ *   The smallshell reads the users commands and executes them if possible. The shell can handle
+ *   background processes and two commands are built in; cd and exit. The user can also give arguments to the 
+ *   commands given. When executing and terminating processes, statistics of the process id and execution time for 
+ *   foreground processes will be printed. 
+ *
+ *   
+ * EXAMPLES:
+ *   ./test 4
+ *
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +31,10 @@
 #include <sys/time.h>
 #include <signal.h>
 
+/*
+* Struct representing elements in a linked list. Each element has got a process id
+* and a pointer to the next element. 
+*/
 struct list_element {
 	pid_t pid;
 	struct list_element * next;
@@ -32,11 +55,14 @@ void sigint_handler (int);
 /* Function definitions */
 
 void sigint_handler (int sig){
-	//Do nothing...
+	//Do nothing when recieveing this signal.
 }
 
-/* Timer function. Uses gettimeofday (2) to get the current time with high precision. 
-	Returns a double representing the current time in milli(??)seconds */ 
+/* read_timer
+* 
+* Timer function. Uses gettimeofday (2) to get the current time with high precision. 
+* Returns a double representing the current time in milliseconds. 
+*/ 
 double read_timer() {
   static bool initialized = false;
   static struct timeval start;
@@ -50,6 +76,15 @@ double read_timer() {
   return (end.tv_sec - start.tv_sec) + 1.0e-6 * (end.tv_usec - start.tv_usec);
 }
 
+/* check_background_processes
+* 
+* Check_background_processes takes an integer representing the number of active processes
+* and returns the new number of active processes. 
+* 
+* It loops through the linked list and checks if the different processes have been completed.
+* If the process has been completed, statistics will be printed and the element representing 
+* the process will be removed from the linked list. 
+*/
 int check_background_processes (int active_pids){
 	int active_pid_loop = active_pids;
 	int i, status;
@@ -79,6 +114,11 @@ int check_background_processes (int active_pids){
 	return active_pids;
 }
 
+/* remove_item
+* 
+* Remove_item takes a node, deletes it from the linked list and frees the memory. 
+* The next-pointer from the node pointing at the deleted node is changed to the node after the deleted one.
+*/
 void remove_item (item * node){
 	item * cur = head;
 	if (node == head){
@@ -93,6 +133,11 @@ void remove_item (item * node){
 	free (node);
 }
 
+/* add_item
+* 
+* Add_item takes a new node and adds it to the linked list. The last elements next-pointer will now be 
+* pointing at the new node.
+*/
 void add_item (item * node){
 	item * cur = head;	
 	while (cur->next != NULL){
@@ -101,6 +146,11 @@ void add_item (item * node){
 	cur->next = node;
 }
 
+/* cut_charachters
+* 
+* Cut_charachters takes a string and an integers. The number given represents how many charachters
+* will be cut from the given string. 
+*/
 void cut_characters (char * string, int num){
 	int len = strlen (string);
 	string += (len-num);
@@ -126,6 +176,7 @@ int main(int argc, char const *argv[])
 	while (true){
 		printf("%s%s$ ", bash, current_working_directory); /* print out the bash symbol for taking input */
 		fgets (input, 70, stdin); /* read one line of input from STDIN */
+		
 		/* Go through the linked list of all active background processes 
 		and check for status change (killed/exited processes) */
 		active_pids = check_background_processes (active_pids);
@@ -137,22 +188,27 @@ int main(int argc, char const *argv[])
 		if (input_string == NULL || strlen (input_string) == 0){
 			continue;
 		}
-		bool background = input_string[strlen (input_string)-1] == '&';
+		bool background = input_string[strlen (input_string)-1] == '&'; 
+		/* background is used to determine if the user wants to run a background process*/
 		bool is_builtin_command = false;
 		if (background)
 			cut_characters (input_string, 2);
 		int i=0;
 		while ((token = strsep(&input_string, " ")) != NULL)
 		{
+			/*Checks if the given command is Exit, and if it is, the shell will exit */
 			if (!strcmp (token, exit_string)){
 				printf("Exiting...\n");
 				is_builtin_command = true;
 				exit (0);
 			}
+			/*Checks if the given command is cd */
 			if (!strcmp (token, cd_string)){
-				token = strsep(&input_string, " "); /* get next token on string, which should contain the path to cd to */
+				/* get next token on string, which should contain the path to cd to */
+				token = strsep(&input_string, " "); 
 				struct stat dir;
-				int exists = stat (token, &dir); /* Checks if the path given exists, and if it is a dir */
+				int exists = stat (token, &dir); 
+				/* Checks if the path given exists, and if it is a dir */
 				if (exists == -1 || !S_ISDIR (dir.st_mode)){
 					printf("directory does not exist, defaulting to homedir\n");
 					token = getenv ("HOME");
@@ -160,16 +216,17 @@ int main(int argc, char const *argv[])
 				chdir (token); /* change working directory to the given path */
 				current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
 				is_builtin_command = true;
-				//input_string[i+1] = '\0'; /* Empty the input string (it might contain garabage efter the path) */
 				break;
 			}
 			program_args[i] = strdup (token);
 			i++;
 		}
 		free(input_string);
+		/*If the command is build in, there is nothing more to do with the input given*/
 		if (is_builtin_command)
 			continue;
 		program_args[i] = '\0';
+		/* A new process is created and the given command will be executed using execvp*/
 		pid = fork ();
 		if (pid == 0){
 			retval = execvp (*program_args, program_args);
@@ -177,7 +234,9 @@ int main(int argc, char const *argv[])
 				printf ("An error occurred while executing %s\n", *program_args);
 			}
 		}
+		
 		if (!background){
+			/*The foreground process will be waited for to terminate and the time it took is measured */
 			printf ("Process with PID %d created\n", pid);
 			double start_time = read_timer ();
 			waitpid (pid, &status, 0);
@@ -188,8 +247,8 @@ int main(int argc, char const *argv[])
 					printf ("The process with PID %d terminated after running for %f seconds\n", pid, run_time);
 				}
 		} else{
+			/*The background process's PID is added to the linked list */
 			printf ("Background process with PID %d created\n", pid);
-			// Add the background process PID to the linked list 
 			item * node = (item *)malloc (sizeof (item));
 			node->pid = pid;
 			if (head == NULL){
