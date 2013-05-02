@@ -194,6 +194,7 @@ int main(int argc, char const *argv[])
 		if (background)
 			cut_characters (input_string, 2);
 		int i=0;
+		/*This while loop separates the given arguments*/
 		while ((token = strsep(&input_string, " ")) != NULL)
 		{
 			/*Checks if the given command is Exit, and if it is, the shell will exit */
