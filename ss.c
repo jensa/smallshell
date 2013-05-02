@@ -51,11 +51,23 @@ void remove_item (item *);
 void cut_characters (char *, int);
 void add_item (item *);
 void sigint_handler (int);
+void clean_exit (int);
 
 /* Function definitions */
 
 void sigint_handler (int sig){
 	//Do nothing when recieveing this signal.
+}
+
+void clean_exit (int active_pids){
+	int active_pid_loop = active_pids;
+	int i;
+	item * current = head;
+	for (i = 0; i <active_pid_loop; i++){
+		kill (current->pid, SIGKILL);
+		current = current->next;
+	}
+	exit (0);
 }
 
 /* read_timer
@@ -64,16 +76,9 @@ void sigint_handler (int sig){
 * Returns a double representing the current time in milliseconds. 
 */ 
 double read_timer() {
-  static bool initialized = false;
-  static struct timeval start;
-  struct timeval end;
-  if( !initialized )
-  {
-    gettimeofday( &start, NULL );
-    initialized = true;
-  }
-  gettimeofday( &end, NULL );
-  return (end.tv_sec - start.tv_sec) + 1.0e-6 * (end.tv_usec - start.tv_usec);
+  struct timeval time_struct;
+  gettimeofday( &time_struct, NULL );
+  return time_struct.tv_sec + 1.0e-6 * time_struct.tv_usec;
 }
 
 /* check_background_processes
@@ -105,7 +110,7 @@ int check_background_processes (int active_pids){
 				active_pids--;
 			}
 			else if (pid == -1){
-				//error
+				printf ("The background process with PID %d exited abnormally with status code %d\n", current->pid, status);
 			} 
 			else{
 				current = current->next;
@@ -146,7 +151,7 @@ void add_item (item * node){
 	cur->next = node;
 }
 
-/* cut_charachters
+/* cut_characters
 * 
 * Cut_charachters takes a string and an integers. The number given represents how many charachters
 * will be cut from the given string. 
@@ -201,7 +206,7 @@ int main(int argc, char const *argv[])
 			if (!strcmp (token, exit_string)){
 				printf("Exiting...\n");
 				is_builtin_command = true;
-				exit (0);
+				clean_exit (active_pids);
 			}
 			/*Checks if the given command is cd */
 			if (!strcmp (token, cd_string)){
@@ -213,9 +218,14 @@ int main(int argc, char const *argv[])
 				if (exists == -1 || !S_ISDIR (dir.st_mode)){
 					printf("directory does not exist, defaulting to homedir\n");
 					token = getenv ("HOME");
+					if (token == NULL)
+						printf ("HOME environment variable not found\n");
 				}
-				chdir (token); /* change working directory to the given path */
-				current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
+				retval = chdir (token); /* change working directory to the given path */
+				if (retval == -1)
+					printf ("Unable to change directory, errno was: %d\n", errno);
+				else
+					current_working_directory = getcwd (0, 0); /* modify the bash symbol to reflect the new path */
 				is_builtin_command = true;
 				break;
 			}
@@ -229,10 +239,14 @@ int main(int argc, char const *argv[])
 		program_args[i] = '\0';
 		/* A new process is created and the given command will be executed using execvp*/
 		pid = fork ();
+		if( -1 == pid ){ /* fork() failed */
+			printf ( "Cannot fork()\n" );
+		}
 		if (pid == 0){
 			retval = execvp (*program_args, program_args);
 			if (retval == -1){
 				printf ("An error occurred while executing %s\n", *program_args);
+				exit (0);
 			}
 		}
 		
@@ -240,13 +254,17 @@ int main(int argc, char const *argv[])
 			/*The foreground process will be waited for to terminate and the time it took is measured */
 			printf ("Process with PID %d created\n", pid);
 			double start_time = read_timer ();
-			waitpid (pid, &status, 0);
+			retval = waitpid (pid, &status, 0);
 			double run_time = read_timer () - start_time;
-			if (status != 0){
-					printf ("The process with PID %d exited with status code %d\n", pid, status);
+			if (retval == -1){
+				printf ("The process with PID %d exited abnormally with status code %d\n", pid, status);
+			} else{
+				if (status != 0){
+					printf ("The process with PID %d exited after running for %f seconds with status code %d\n", pid, run_time, status);
 				} else{
 					printf ("The process with PID %d terminated after running for %f seconds\n", pid, run_time);
 				}
+			}
 		} else{
 			/*The background process's PID is added to the linked list */
 			printf ("Background process with PID %d created\n", pid);
